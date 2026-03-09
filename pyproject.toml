@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "starmaker-toolkit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Universal OSS promotion toolkit — generate post drafts, audit repos, find awesome-lists, and enhance READMEs"
 readme = "README.md"
 license = "MIT"

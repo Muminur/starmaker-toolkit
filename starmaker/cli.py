@@ -37,11 +37,13 @@ def _interactive_menu() -> None:
     choices = {
         "1": ("init", "Initialize starmaker.yaml config"),
         "2": ("draft", "Generate promotional post drafts"),
-        "3": ("audit", "Audit repo for star-worthiness"),
-        "4": ("awesome", "Find awesome-lists & generate PRs"),
-        "5": ("compare", "Generate comparison table"),
-        "6": ("readme", "Analyze & enhance README"),
-        "7": ("all", "Run everything"),
+        "3": ("post", "Publish drafts to platforms"),
+        "4": ("audit", "Audit repo for star-worthiness"),
+        "5": ("awesome", "Find awesome-lists & generate PRs"),
+        "6": ("compare", "Generate comparison table"),
+        "7": ("readme", "Analyze & enhance README"),
+        "8": ("credentials", "Setup API credentials"),
+        "9": ("all", "Run everything"),
         "q": ("quit", "Exit"),
     }
 
@@ -166,6 +168,72 @@ def cmd_draft(platform: str | None, output: str) -> None:
     run(config, platform=platform, output_dir=output)
 
 
+@cli.command("post")
+@click.option("--platform", "-p", help="Post to a specific platform only")
+@click.option("--drafts", "-d", "drafts_dir", default="drafts", help="Drafts directory")
+@click.option("--dry-run", is_flag=True, help="Preview posts without publishing")
+@click.option("--yes", "-y", "skip_confirm", is_flag=True, help="Skip confirmation prompt")
+def cmd_post(platform: str | None, drafts_dir: str, dry_run: bool, skip_confirm: bool) -> None:
+    """Publish drafts to platforms via official APIs."""
+    from starmaker.commands.post import run
+    config = load_config()
+    run(config, platform=platform, drafts_dir=drafts_dir, dry_run=dry_run, skip_confirm=skip_confirm)
+
+
+@cli.command("credentials")
+def cmd_credentials() -> None:
+    """Setup API credentials for publishing."""
+    from starmaker.credentials import init_credentials, load_credentials, save_credentials, CREDENTIALS_FILE
+
+    creds_file = init_credentials()
+    creds = load_credentials()
+
+    console.print(Panel(
+        f"[bold]Credentials file:[/bold] {CREDENTIALS_FILE}\n",
+        title="StarMaker Credentials",
+        border_style="blue",
+    ))
+
+    platform_keys = {
+        "Reddit": ["reddit_client_id", "reddit_client_secret", "reddit_username", "reddit_password"],
+        "Dev.to": ["devto_api_key"],
+        "Twitter/X": ["twitter_api_key", "twitter_api_secret", "twitter_access_token",
+                       "twitter_access_secret", "twitter_bearer_token", "twitter_username"],
+        "Discord": ["discord_webhook_urls"],
+        "Hacker News": [],
+    }
+
+    from rich.table import Table
+    table = Table(title="Credential Status", border_style="blue")
+    table.add_column("Platform", style="bold")
+    table.add_column("Status")
+    table.add_column("Setup Guide")
+
+    for platform_name, keys in platform_keys.items():
+        if not keys:
+            table.add_row(platform_name, "[green]No keys needed[/green]", "Opens browser")
+        elif all(creds.get(k) for k in keys):
+            table.add_row(platform_name, "[green]Configured[/green]", "")
+        else:
+            configured = sum(1 for k in keys if creds.get(k))
+            guides = {
+                "Reddit": "https://www.reddit.com/prefs/apps/",
+                "Dev.to": "https://dev.to/settings/extensions",
+                "Twitter/X": "https://developer.twitter.com/en/portal/dashboard",
+                "Discord": "Server Settings > Integrations > Webhooks",
+            }
+            table.add_row(
+                platform_name,
+                f"[yellow]{configured}/{len(keys)} keys[/yellow]",
+                guides.get(platform_name, ""),
+            )
+
+    console.print(table)
+
+    console.print(f"\n[dim]Edit {CREDENTIALS_FILE} to add your API keys.[/dim]")
+    console.print("[dim]This file is in your home directory and ignored by git.[/dim]")
+
+
 @cli.command("audit")
 @click.option("--url", "-u", help="GitHub repo URL (auto-detects from local repo if omitted)")
 def cmd_audit(url: str | None) -> None:
@@ -240,7 +308,7 @@ def cmd_all(output: str, url: str | None) -> None:
         f"[bold green]All done! Check ./{output}/ for generated content.[/bold green]\n\n"
         "Next steps:\n"
         "1. Review and customize each draft\n"
-        "2. Post manually to each platform\n"
+        "2. Run [cyan]starmaker post[/cyan] to publish drafts\n"
         "3. Submit PRs to awesome-lists\n"
         "4. Update your README with suggestions",
         title="StarMaker Complete",

@@ -17,4 +17,5 @@ htmlcov/
 .coverage
 drafts/
 starmaker.yaml
+credentials.yaml
 CLAUDE.md

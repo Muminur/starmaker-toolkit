@@ -18,6 +18,8 @@ starmaker
 starmaker init          # Setup wizard
 starmaker audit         # Audit your repo
 starmaker draft         # Generate post drafts
+starmaker post          # Publish drafts to platforms
+starmaker credentials   # Setup API keys
 starmaker awesome       # Find awesome-lists
 starmaker compare       # Comparison table
 starmaker readme        # README suggestions
@@ -50,6 +52,10 @@ starmaker all           # Run everything
 | `starmaker awesome` | Find matching awesome-lists and generate PR templates |
 | `starmaker compare` | Generate feature comparison table vs competitors |
 | `starmaker readme` | Analyze README and suggest enhancements |
+| `starmaker post` | Publish drafts to platforms via official APIs |
+| `starmaker post -p reddit` | Post to a single platform |
+| `starmaker post --dry-run` | Preview what would be posted |
+| `starmaker credentials` | View/setup API credentials |
 | `starmaker all` | Run all commands in sequence |
 
 ## Configuration
@@ -69,14 +75,42 @@ project:
     - "Key feature 2"
 ```
 
+## Publishing
+
+StarMaker can publish drafts directly to platforms using their **official APIs**.
+
+```bash
+# 1. Setup credentials (one-time)
+starmaker credentials      # Shows status and setup guides
+# Edit ~/.starmaker/credentials.yaml with your API keys
+
+# 2. Preview what will be posted
+starmaker post --dry-run
+
+# 3. Publish
+starmaker post             # All platforms
+starmaker post -p reddit   # Single platform
+starmaker post -y          # Skip confirmation
+```
+
+### Platform API Requirements
+
+| Platform | API Keys Needed | How to Get |
+|----------|----------------|------------|
+| Reddit | Client ID, Secret, Username, Password | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps/) (create "script" app) |
+| Dev.to | API Key | [dev.to/settings/extensions](https://dev.to/settings/extensions) |
+| Twitter/X | Optional (falls back to browser) | [developer.twitter.com](https://developer.twitter.com/) ($100/mo for API) |
+| Discord | Webhook URL(s) | Server Settings > Integrations > Webhooks |
+| Hacker News | None | Opens browser with pre-filled form |
+
+Credentials are stored in `~/.starmaker/credentials.yaml` (never committed to git).
+
 ## How It Works
 
-StarMaker generates **text content** for you to post manually. It does not:
-- Automate posting to any platform
-- Create fake engagement
+StarMaker uses **official platform APIs** with your own credentials. It does not:
+- Use browser automation or anti-detection tools
+- Create fake engagement or artificial stars
 - Violate any platform's terms of service
-
-It's a content generator and repo auditor — you do the posting.
 
 ## License
 
