@@ -1,0 +1,76 @@
+# StarMaker Configuration
+# Copy this file to starmaker.yaml and customize for your project.
+
+project:
+  name: MyProject
+  repo: https://github.com/username/my-project
+  tagline: "A one-line description of your project"
+  description: |
+    A longer description (2-3 sentences) explaining what your project does,
+    who it's for, and what makes it unique.
+  website: ""  # Optional project website
+  competitors:
+    - Competitor1
+    - Competitor2
+    - Competitor3
+  tags:
+    - python
+    - cli
+    - open-source
+  highlights:
+    - "Key feature or metric #1"
+    - "Key feature or metric #2"
+    - "Key feature or metric #3"
+  tech_stack:
+    - Python
+    - Click
+    - Rich
+
+author:
+  name: Your Name
+  github: username
+  twitter: ""  # Optional Twitter/X handle
+  website: ""  # Optional personal site
+
+promotion:
+  # Which platforms to generate drafts for
+  platforms:
+    - reddit
+    - hackernews
+    - devto
+    - twitter
+    - discord
+
+  # Reddit-specific settings
+  reddit:
+    subreddits:
+      - opensource
+      - commandline
+      - Python
+
+  # Awesome-lists to target
+  awesome_lists:
+    - awesome-python
+    - awesome-cli-apps
+
+  # Competitors for comparison table
+  comparison:
+    features:
+      - "Feature 1"
+      - "Feature 2"
+      - "Feature 3"
+      - "Open Source"
+      - "Free"
+    competitors:
+      Competitor1:
+        - true
+        - true
+        - false
+        - false
+        - false
+      Competitor2:
+        - true
+        - false
+        - true
+        - true
+        - true
