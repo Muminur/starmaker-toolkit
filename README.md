@@ -105,6 +105,76 @@ starmaker post -y          # Skip confirmation
 
 Credentials are stored in `~/.starmaker/credentials.yaml` (never committed to git).
 
+### Reddit Setup Guide
+
+1. Go to [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps/)
+2. Scroll down and click **"create another app..."**
+3. Fill in:
+   - **name:** StarMaker (or any name)
+   - **type:** Select **script**
+   - **redirect uri:** `http://localhost:8080`
+4. Click **"create app"**
+5. Copy the **client ID** (string under the app name) and **secret**
+6. Add to `~/.starmaker/credentials.yaml`:
+   ```yaml
+   reddit_client_id: "your_client_id"
+   reddit_client_secret: "your_secret"
+   reddit_username: "your_reddit_username"
+   reddit_password: "your_reddit_password"
+   ```
+
+### Dev.to Setup Guide
+
+1. Go to [dev.to/settings/extensions](https://dev.to/settings/extensions)
+2. Under **DEV Community API Keys**, enter a description and click **Generate API Key**
+3. Copy the key and add to `~/.starmaker/credentials.yaml`:
+   ```yaml
+   devto_api_key: "your_api_key"
+   ```
+4. Articles are created as **drafts** by default — review on Dev.to before publishing
+
+### Twitter/X Setup Guide
+
+**Option A: Free (Browser Intent)**
+No setup needed. StarMaker opens a pre-filled compose window in your browser. Just click Tweet.
+
+**Option B: API ($100/mo Basic plan)**
+1. Go to [developer.twitter.com](https://developer.twitter.com/en/portal/dashboard)
+2. Create a project and app
+3. Generate API keys and access tokens
+4. Add to `~/.starmaker/credentials.yaml`:
+   ```yaml
+   twitter_api_key: "your_api_key"
+   twitter_api_secret: "your_api_secret"
+   twitter_access_token: "your_access_token"
+   twitter_access_secret: "your_access_secret"
+   twitter_bearer_token: "your_bearer_token"
+   twitter_username: "your_handle"
+   ```
+5. Install the OAuth library: `pip install requests-oauthlib`
+
+### Discord Setup Guide
+
+1. Open your Discord server
+2. Go to **Server Settings > Integrations > Webhooks**
+3. Click **New Webhook**
+4. Choose the channel (e.g., #showcase or #projects)
+5. Copy the **Webhook URL**
+6. Add to `~/.starmaker/credentials.yaml`:
+   ```yaml
+   discord_webhook_urls: "https://discord.com/api/webhooks/..."
+   ```
+7. For multiple channels, separate URLs with commas:
+   ```yaml
+   discord_webhook_urls: "https://discord.com/api/webhooks/first,...,https://discord.com/api/webhooks/second,..."
+   ```
+
+### Hacker News
+
+No setup needed. StarMaker opens the HN submission page in your browser with the title and URL pre-filled. Just log in and click Submit.
+
+**Tip:** Post between 9-11 AM ET on weekdays for best visibility.
+
 ## How It Works
 
 StarMaker uses **official platform APIs** with your own credentials. It does not:
