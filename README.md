@@ -75,6 +75,29 @@ project:
     - "Key feature 2"
 ```
 
+## Automated Credential Setup
+
+StarMaker includes a browser-based setup wizard that automates API key creation.
+
+```bash
+# Install browser automation (one-time)
+pip install "starmaker-toolkit[browser]"
+
+# Run the setup wizard
+starmaker setup                # All platforms
+starmaker setup -p reddit      # Single platform
+starmaker setup --test-only    # Just test existing credentials
+```
+
+The wizard:
+1. Opens a browser window for each platform
+2. You log in to your own account
+3. The script creates API apps and extracts credentials automatically
+4. Saves everything to `~/.starmaker/credentials.yaml`
+5. Tests each credential to verify it works
+
+No credentials are ever sent anywhere except to the official platform APIs.
+
 ## Publishing
 
 StarMaker can publish drafts directly to platforms using their **official APIs**.

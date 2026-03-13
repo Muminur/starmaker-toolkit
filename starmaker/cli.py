@@ -42,8 +42,9 @@ def _interactive_menu() -> None:
         "5": ("awesome", "Find awesome-lists & generate PRs"),
         "6": ("compare", "Generate comparison table"),
         "7": ("readme", "Analyze & enhance README"),
-        "8": ("credentials", "Setup API credentials"),
-        "9": ("all", "Run everything"),
+        "8": ("credentials", "View API credential status"),
+        "9": ("setup", "Auto-setup credentials (browser wizard)"),
+        "0": ("all", "Run everything"),
         "q": ("quit", "Exit"),
     }
 
@@ -231,7 +232,22 @@ def cmd_credentials() -> None:
     console.print(table)
 
     console.print(f"\n[dim]Edit {CREDENTIALS_FILE} to add your API keys.[/dim]")
-    console.print("[dim]This file is in your home directory and ignored by git.[/dim]")
+    console.print("[dim]Or run [cyan]starmaker setup[/cyan] for automated browser-based setup.[/dim]")
+
+
+@cli.command("setup")
+@click.option("--platform", "-p", multiple=True, help="Platform(s) to set up (reddit, devto, discord)")
+@click.option("--test-only", is_flag=True, help="Only test existing credentials")
+def cmd_setup(platform: tuple[str, ...], test_only: bool) -> None:
+    """Automated credential setup wizard (opens browser)."""
+    from starmaker.setup_wizard.wizard import run_wizard, test_all_credentials
+    from starmaker.credentials import load_credentials
+
+    if test_only:
+        test_all_credentials(load_credentials())
+    else:
+        platforms = list(platform) if platform else None
+        run_wizard(platforms=platforms)
 
 
 @cli.command("audit")

@@ -32,6 +32,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+browser = [
+    "camoufox[geoip]>=0.4",
+    "playwright>=1.40",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
