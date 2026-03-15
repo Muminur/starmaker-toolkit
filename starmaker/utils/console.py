@@ -7,10 +7,23 @@ import sys
 
 from rich.console import Console
 
-# Force UTF-8 output on Windows to avoid cp1252 encoding errors with Unicode
-# characters like checkmarks (✓ ✗), emojis (🚀 ✅ ❌), etc.
-if sys.platform == "win32":
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
-console = Console()
+def _make_console() -> Console:
+    """Create a Rich Console with UTF-8 encoding on Windows.
+
+    Avoids replacing sys.stdout at import time (which breaks pytest capture)
+    by passing a UTF-8 TextIOWrapper directly to Console only when needed.
+    """
+    if sys.platform == "win32":
+        try:
+            utf8_stdout = io.TextIOWrapper(
+                sys.stdout.buffer, encoding="utf-8", errors="replace"
+            )
+            return Console(file=utf8_stdout, highlight=False)
+        except AttributeError:
+            # sys.stdout may not have .buffer in some environments (e.g. pytest capture)
+            pass
+    return Console()
+
+
+console = _make_console()

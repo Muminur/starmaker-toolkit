@@ -44,6 +44,7 @@ def _interactive_menu() -> None:
         "7": ("readme", "Analyze & enhance README"),
         "8": ("credentials", "View API credential status"),
         "9": ("setup", "Auto-setup credentials (browser wizard)"),
+        "a": ("auto_post", "Auto-generate posts from README (NLP)"),
         "0": ("all", "Run everything"),
         "q": ("quit", "Exit"),
     }
@@ -52,7 +53,7 @@ def _interactive_menu() -> None:
     for key, (cmd, desc) in choices.items():
         console.print(f"  [cyan]{key}[/cyan]) {desc}")
 
-    choice = Prompt.ask("\nSelect", choices=list(choices.keys()), default="7")
+    choice = Prompt.ask("\nSelect", choices=list(choices.keys()), default="a")
 
     if choice == "q":
         return
@@ -316,6 +317,26 @@ def cmd_readme(readme_path: str | None, output: str) -> None:
     from starmaker.commands.readme import run
     config = load_config()
     run(config, readme_path=readme_path, output_dir=output)
+
+
+@cli.command("auto-post")
+@click.option("--readme", "-r", "readme_path", required=True, help="Path to README.md file")
+@click.option("--repo", "-u", "repo_url", default="", help="GitHub repo URL")
+@click.option("--platform", "-p", help="Generate for a specific platform only")
+@click.option("--output", "-o", default="drafts", help="Output directory")
+@click.option("--dry-run", is_flag=True, help="Preview posts without publishing")
+@click.option("--publish", is_flag=True, help="Publish after generating drafts")
+@click.option("--yes", "-y", "skip_confirm", is_flag=True, help="Skip confirmation prompt")
+def cmd_auto_post(readme_path: str, repo_url: str, platform: str | None, output: str,
+                   dry_run: bool, publish: bool, skip_confirm: bool) -> None:
+    """Generate and publish posts from a README.md file.
+
+    Reads your README, extracts key info using NLP (no AI/LLM),
+    and generates platform-specific posts automatically.
+    """
+    from starmaker.commands.auto_post import run
+    run(readme_path, repo_url=repo_url, platform=platform, output_dir=output,
+        dry_run=dry_run, publish=publish, skip_confirm=skip_confirm)
 
 
 @cli.command("all")
