@@ -183,14 +183,19 @@ def cmd_post(platform: str | None, drafts_dir: str, dry_run: bool, skip_confirm:
 
 @cli.command("credentials")
 def cmd_credentials() -> None:
-    """Setup API credentials for publishing."""
-    from starmaker.credentials import init_credentials, load_credentials, save_credentials, CREDENTIALS_FILE
+    """View API credential status and sources."""
+    from starmaker.credentials import (
+        init_credentials, load_credentials, get_credential_sources,
+        CREDENTIALS_DIR,
+    )
 
-    creds_file = init_credentials()
+    init_credentials()
     creds = load_credentials()
+    sources = get_credential_sources()
 
     console.print(Panel(
-        f"[bold]Credentials file:[/bold] {CREDENTIALS_FILE}\n",
+        f"[bold]Credentials directory:[/bold] {CREDENTIALS_DIR}\n"
+        f"[bold]Supported sources:[/bold] env vars > .env file > credentials.yaml\n",
         title="StarMaker Credentials",
         border_style="blue",
     ))
@@ -208,31 +213,58 @@ def cmd_credentials() -> None:
     table = Table(title="Credential Status", border_style="blue")
     table.add_column("Platform", style="bold")
     table.add_column("Status")
+    table.add_column("Source")
     table.add_column("Setup Guide")
+
+    source_styles = {
+        "env": "[green]env var[/green]",
+        "dotenv": "[cyan].env file[/cyan]",
+        "yaml": "[yellow]yaml file[/yellow]",
+        "unset": "[dim]not set[/dim]",
+    }
 
     for platform_name, keys in platform_keys.items():
         if not keys:
-            table.add_row(platform_name, "[green]No keys needed[/green]", "Opens browser")
-        elif all(creds.get(k) for k in keys):
-            table.add_row(platform_name, "[green]Configured[/green]", "")
+            table.add_row(platform_name, "[green]No keys needed[/green]", "", "Opens browser")
+            continue
+
+        configured = sum(1 for k in keys if creds.get(k))
+        total = len(keys)
+
+        if configured == total:
+            # Show the source of the first key as representative
+            src = sources.get(keys[0], "unset")
+            table.add_row(
+                platform_name,
+                "[green]Configured[/green]",
+                source_styles.get(src, src),
+                "",
+            )
         else:
-            configured = sum(1 for k in keys if creds.get(k))
+            # Show mixed sources
+            src_summary = set(sources.get(k, "unset") for k in keys if creds.get(k))
+            src_text = ", ".join(source_styles.get(s, s) for s in src_summary) if src_summary else source_styles["unset"]
+
             guides = {
                 "Reddit": "https://www.reddit.com/prefs/apps/",
                 "Dev.to": "https://dev.to/settings/extensions",
-                "Twitter/X": "https://developer.twitter.com/en/portal/dashboard",
-                "Discord": "Server Settings > Integrations > Webhooks",
+                "Twitter/X": "https://developer.twitter.com/",
+                "Discord": "Server Settings > Webhooks",
             }
             table.add_row(
                 platform_name,
-                f"[yellow]{configured}/{len(keys)} keys[/yellow]",
+                f"[yellow]{configured}/{total} keys[/yellow]",
+                src_text,
                 guides.get(platform_name, ""),
             )
 
     console.print(table)
 
-    console.print(f"\n[dim]Edit {CREDENTIALS_FILE} to add your API keys.[/dim]")
-    console.print("[dim]Or run [cyan]starmaker setup[/cyan] for automated browser-based setup.[/dim]")
+    console.print("\n[dim]Options for setting credentials:[/dim]")
+    console.print("  [cyan]1.[/cyan] Set environment variables (e.g. REDDIT_CLIENT_ID)")
+    console.print("  [cyan]2.[/cyan] Create a .env file (copy from .env.example)")
+    console.print(f"  [cyan]3.[/cyan] Edit {CREDENTIALS_DIR / 'credentials.yaml'}")
+    console.print("  [cyan]4.[/cyan] Run [cyan]starmaker setup[/cyan] for browser-based setup")
 
 
 @cli.command("setup")

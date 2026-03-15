@@ -66,7 +66,6 @@ def _test_discord(credentials: dict[str, str]) -> tuple[bool, str]:
             if resp.status_code == 200:
                 data = resp.json()
                 channel = data.get("channel_id", "?")
-                guild = data.get("guild_id", "?")
                 results.append(f"Webhook {i + 1}: OK (channel {channel})")
             else:
                 results.append(f"Webhook {i + 1}: HTTP {resp.status_code}")
@@ -185,7 +184,8 @@ def run_wizard(platforms: list[str] | None = None) -> None:
             if result:
                 credentials.update(result)
                 save_credentials(credentials)
-                console.print(f"[green]Saved {available[plat][0]} credentials.[/green]\n")
+                console.print(f"[green]Saved {available[plat][0]} credentials to YAML.[/green]")
+                console.print("[dim]Tip: You can also set these as environment variables or in a .env file.[/dim]\n")
             else:
                 console.print(f"[yellow]Skipped {available[plat][0]}.[/yellow]\n")
 
@@ -198,6 +198,8 @@ def run_wizard(platforms: list[str] | None = None) -> None:
 
     console.print(Panel(
         "[bold green]Setup complete![/bold green]\n\n"
+        "Credentials saved to ~/.starmaker/credentials.yaml\n"
+        "You can also use a .env file or environment variables.\n\n"
         "Run [cyan]starmaker post --dry-run[/cyan] to preview posts.\n"
         "Run [cyan]starmaker post[/cyan] to publish.",
         title="Done",

@@ -10,7 +10,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from starmaker.config import StarMakerConfig
-from starmaker.credentials import load_credentials, init_credentials, CREDENTIALS_FILE
+from starmaker.credentials import load_credentials, init_credentials, CREDENTIALS_DIR
 from starmaker.publishers import PUBLISHERS
 from starmaker.publishers.base import PostResult
 from starmaker.utils.console import console
@@ -130,10 +130,15 @@ def run(
     # Load credentials
     credentials = load_credentials()
     if not credentials:
-        creds_file = init_credentials()
+        init_credentials()
         console.print(Panel(
-            f"[yellow]Credentials file created at:[/yellow]\n{creds_file}\n\n"
-            "Edit this file and add your API keys, then run `starmaker post` again.\n\n"
+            f"[yellow]No credentials found.[/yellow]\n\n"
+            "Set credentials using any of these methods:\n"
+            "  [cyan]1.[/cyan] Set environment variables (e.g. REDDIT_CLIENT_ID)\n"
+            "  [cyan]2.[/cyan] Create a .env file (copy from .env.example)\n"
+            f"  [cyan]3.[/cyan] Edit {CREDENTIALS_DIR / 'credentials.yaml'}\n"
+            "  [cyan]4.[/cyan] Run [cyan]starmaker setup[/cyan] for browser-based setup\n\n"
+            "Then run [cyan]starmaker post[/cyan] again.\n\n"
             "[bold]Required keys by platform:[/bold]\n"
             "  Reddit:  reddit_client_id, reddit_client_secret, reddit_username, reddit_password\n"
             "  Dev.to:  devto_api_key\n"
