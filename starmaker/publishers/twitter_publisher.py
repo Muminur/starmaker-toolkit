@@ -9,7 +9,6 @@ This publisher supports two modes:
 from __future__ import annotations
 
 import urllib.parse
-import webbrowser
 
 import requests
 
@@ -76,7 +75,8 @@ class TwitterPublisher(BasePublisher):
         )
 
     def _post_via_intent(self, text: str) -> PostResult:
-        """Open Twitter web intent in browser (free, no API keys needed)."""
+        """Open Twitter web intent in default browser (free, no API keys needed)."""
+        import webbrowser
         intent_url = "https://twitter.com/intent/tweet?" + urllib.parse.urlencode({"text": text[:280]})
 
         try:

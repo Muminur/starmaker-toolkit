@@ -6,9 +6,6 @@ submission form in the user's browser with pre-filled fields.
 
 from __future__ import annotations
 
-import urllib.parse
-import webbrowser
-
 from starmaker.publishers.base import BasePublisher, PostResult
 
 
@@ -25,24 +22,40 @@ class HackerNewsPublisher(BasePublisher):
         return True  # No credentials needed
 
     def publish(self, title: str, body: str, credentials: dict[str, str], **kwargs) -> PostResult:
-        """Open HN submit page in default browser."""
+        """Open HN submit page and fill form fields."""
         url = kwargs.get("url", "")
 
-        params = {"title": title[:80]}
-        if url:
-            params["url"] = url
-        else:
-            params["text"] = body[:2000]
+        submit_url = "https://news.ycombinator.com/submitlink"
 
-        submit_url = "https://news.ycombinator.com/submitlink?" + urllib.parse.urlencode(params)
+        # HN form fields: title, url, text
+        fields = {"input[name='title']": title[:80]}
+        if url:
+            fields["input[name='url']"] = url
+        else:
+            fields["textarea[name='text']"] = body[:2000]
 
         try:
+            from starmaker.publishers._camoufox_open import open_in_camoufox
+            from starmaker.utils.console import console
+
+            console.print("[dim]Opening Hacker News in Camoufox...[/dim]")
+            open_in_camoufox(submit_url, platform="hackernews", fields=fields)
+            console.print("[green]Hacker News browser session complete.[/green]")
+
+            return PostResult(
+                platform="Hacker News",
+                success=True,
+                url=submit_url,
+                message="Opened HN submission page in Camoufox. Log in and click Submit.",
+            )
+        except ImportError:
+            import webbrowser
             webbrowser.open(submit_url)
             return PostResult(
                 platform="Hacker News",
                 success=True,
                 url=submit_url,
-                message="Opened HN submission page in your browser. Log in and click Submit.",
+                message="Opened HN submission page in default browser (Camoufox not installed).",
             )
         except Exception as e:
             return PostResult(
