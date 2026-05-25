@@ -16,13 +16,28 @@ class HackerNewsPublisher(BasePublisher):
     """
 
     platform_name = "Hacker News"
-    requires_keys = []  # No API keys needed — browser-based
+    requires_keys = ()  # No API keys needed — browser-based
 
     def validate_credentials(self, credentials: dict[str, str]) -> bool:
+        """Always True: Hacker News submission is browser-based and keyless."""
         return True  # No credentials needed
 
     def publish(self, title: str, body: str, credentials: dict[str, str], **kwargs) -> PostResult:
-        """Open HN submit page and fill form fields."""
+        """Open the HN submission page in a browser with pre-filled fields.
+
+        Prefers Camoufox (anti-detection) and falls back to the default
+        browser when Camoufox is not installed.
+
+        Args:
+            title: Submission title (truncated to 80 chars).
+            body: Self-post text, used only when no ``url`` is supplied.
+            credentials: Unused; HN needs no credentials.
+            **kwargs: Supports ``url`` (link submission target).
+
+        Returns:
+            A :class:`PostResult`; success indicates the browser was opened,
+            not that a submission was posted.
+        """
         url = kwargs.get("url", "")
 
         submit_url = "https://news.ycombinator.com/submitlink"
@@ -49,17 +64,27 @@ class HackerNewsPublisher(BasePublisher):
                 message="Opened HN submission page in Camoufox. Log in and click Submit.",
             )
         except ImportError:
+            # Camoufox not installed — fall back to the default browser.
             import webbrowser
-            webbrowser.open(submit_url)
+
+            try:
+                webbrowser.open(submit_url)
+            except (webbrowser.Error, OSError) as e:
+                return PostResult(
+                    platform="Hacker News",
+                    success=False,
+                    error=f"Could not open browser ({type(e).__name__}): {e}",
+                )
             return PostResult(
                 platform="Hacker News",
                 success=True,
                 url=submit_url,
                 message="Opened HN submission page in default browser (Camoufox not installed).",
             )
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
+            # RuntimeError: Camoufox subprocess failed. OSError: browser launch failed.
             return PostResult(
                 platform="Hacker News",
                 success=False,
-                error=f"Could not open browser: {e}",
+                error=f"Could not open browser ({type(e).__name__}): {e}",
             )

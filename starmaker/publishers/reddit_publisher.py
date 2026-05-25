@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import re
+
 import requests
 
+from starmaker import __version__
 from starmaker.publishers.base import BasePublisher, PostResult
+
+# Reddit subreddit names: 3-21 chars, letters/digits/underscores only.
+_SUBREDDIT_RE = re.compile(r"^[A-Za-z0-9_]{3,21}$")
 
 
 class RedditPublisher(BasePublisher):
@@ -14,21 +20,38 @@ class RedditPublisher(BasePublisher):
     """
 
     platform_name = "Reddit"
-    requires_keys = ["reddit_client_id", "reddit_client_secret", "reddit_username", "reddit_password"]
+    requires_keys = (
+        "reddit_client_id",
+        "reddit_client_secret",
+        "reddit_username",
+        "reddit_password",
+    )
 
     def validate_credentials(self, credentials: dict[str, str]) -> bool:
+        """Return True when all required Reddit OAuth credentials are present."""
         missing = self.get_missing_keys(credentials)
         return len(missing) == 0
 
+    def _user_agent(self, username: str) -> str:
+        """Build the API User-Agent string from the package version."""
+        return f"StarMaker/{__version__} (by /u/{username})"
+
     def _get_access_token(self, credentials: dict[str, str]) -> str | None:
-        """Obtain OAuth2 access token using script app flow."""
+        """Obtain an OAuth2 access token using the script app password flow.
+
+        Args:
+            credentials: Reddit API credentials.
+
+        Returns:
+            The bearer access token, or None if authentication failed.
+        """
         auth = (credentials["reddit_client_id"], credentials["reddit_client_secret"])
         data = {
             "grant_type": "password",
             "username": credentials["reddit_username"],
             "password": credentials["reddit_password"],
         }
-        headers = {"User-Agent": "StarMaker/0.1.0 (by /u/{})".format(credentials["reddit_username"])}
+        headers = {"User-Agent": self._user_agent(credentials["reddit_username"])}
 
         resp = requests.post(
             "https://www.reddit.com/api/v1/access_token",
@@ -43,8 +66,28 @@ class RedditPublisher(BasePublisher):
         return None
 
     def publish(self, title: str, body: str, credentials: dict[str, str], **kwargs) -> PostResult:
-        """Post to a subreddit."""
+        """Post a self (text) submission to a subreddit.
+
+        Args:
+            title: Submission title (truncated to 300 chars by Reddit).
+            body: Submission body markdown.
+            credentials: Reddit API credentials.
+            **kwargs: Supports ``subreddit`` (name without the ``r/`` prefix).
+
+        Returns:
+            A :class:`PostResult` describing the outcome.
+        """
         subreddit = kwargs.get("subreddit", "test")
+
+        if not _SUBREDDIT_RE.match(subreddit):
+            return PostResult(
+                platform=f"Reddit r/{subreddit}",
+                success=False,
+                error=(
+                    f"Invalid subreddit name '{subreddit}'. Names must be 3-21 "
+                    "characters using only letters, digits, and underscores."
+                ),
+            )
 
         token = self._get_access_token(credentials)
         if not token:
@@ -56,7 +99,7 @@ class RedditPublisher(BasePublisher):
 
         headers = {
             "Authorization": f"Bearer {token}",
-            "User-Agent": "StarMaker/0.1.0 (by /u/{})".format(credentials["reddit_username"]),
+            "User-Agent": self._user_agent(credentials["reddit_username"]),
         }
 
         data = {

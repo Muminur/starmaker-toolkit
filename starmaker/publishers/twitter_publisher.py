@@ -23,10 +23,10 @@ class TwitterPublisher(BasePublisher):
     """
 
     platform_name = "Twitter/X"
-    requires_keys = []  # Optional — falls back to browser intent
+    requires_keys = ()  # Optional — falls back to browser intent
 
     def validate_credentials(self, credentials: dict[str, str]) -> bool:
-        # Always valid — browser intent works without keys
+        """Always True: the browser-intent fallback needs no credentials."""
         return True
 
     def _has_api_keys(self, credentials: dict[str, str]) -> bool:
@@ -38,7 +38,18 @@ class TwitterPublisher(BasePublisher):
         )
 
     def _post_via_api(self, text: str, credentials: dict[str, str]) -> PostResult:
-        """Post via Twitter API v2 (requires paid plan)."""
+        """Post a tweet via the Twitter API v2 (requires a paid plan).
+
+        Args:
+            text: Tweet text (truncated to 280 chars).
+            credentials: OAuth 1.0a user-context credentials.
+
+        Returns:
+            A :class:`PostResult` describing the outcome.
+
+        Raises:
+            ImportError: If ``requests-oauthlib`` is not installed.
+        """
         # OAuth 1.0a User Context
         from requests_oauthlib import OAuth1
 
@@ -75,7 +86,15 @@ class TwitterPublisher(BasePublisher):
         )
 
     def _post_via_intent(self, text: str) -> PostResult:
-        """Open Twitter web intent in default browser (free, no API keys needed)."""
+        """Open the Twitter web intent in the default browser (free, no keys).
+
+        Args:
+            text: Tweet text (truncated to 280 chars).
+
+        Returns:
+            A :class:`PostResult`; success indicates the browser was launched,
+            not that a tweet was published.
+        """
         import webbrowser
         intent_url = "https://twitter.com/intent/tweet?" + urllib.parse.urlencode({"text": text[:280]})
 
@@ -87,11 +106,11 @@ class TwitterPublisher(BasePublisher):
                 url=intent_url,
                 message="Opened Twitter compose window in your browser. Review and click Tweet.",
             )
-        except Exception as e:
+        except (webbrowser.Error, OSError) as e:
             return PostResult(
                 platform="Twitter/X",
                 success=False,
-                error=f"Could not open browser: {e}",
+                error=f"Could not open browser ({type(e).__name__}): {e}",
             )
 
     def publish(self, title: str, body: str, credentials: dict[str, str], **kwargs) -> PostResult:
