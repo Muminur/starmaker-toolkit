@@ -60,14 +60,25 @@ AWESOME_LISTS = {
     ],
 }
 
+#: Case-insensitive view of ``AWESOME_LISTS`` (keys normalised to lower-case)
+#: so tag matching does not depend on the casing of either the config tags or
+#: the dictionary keys above.
+_AWESOME_LISTS_LOWER: dict[str, list[tuple[str, str]]] = {
+    key.lower(): value for key, value in AWESOME_LISTS.items()
+}
+
 
 def _find_matching_lists(config: StarMakerConfig) -> list[tuple[str, str]]:
-    """Find awesome-lists matching the project's tags."""
-    matches = set()
+    """Find awesome-lists matching the project's tags.
 
-    # From config
+    Tag matching is case-insensitive: ``Python``, ``python`` and ``PYTHON`` all
+    map to the same awesome-list entries.
+    """
+    matches: set[tuple[str, str]] = set()
+
+    # From config tags (case-insensitive lookup)
     for tag in config.project.tags:
-        for name, repo in AWESOME_LISTS.get(tag.lower(), []):
+        for name, repo in _AWESOME_LISTS_LOWER.get(tag.lower(), []):
             matches.add((name, repo))
 
     # From explicit config
