@@ -12,6 +12,7 @@ get_credential_sources() are added/updated in starmaker/credentials.py.
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -495,3 +496,63 @@ class TestInitCredentials:
 
         assert isinstance(result, Path)
         assert result.name == "credentials.yaml"
+
+
+# ---------------------------------------------------------------------------
+# TestPlaintextWarning
+# ---------------------------------------------------------------------------
+
+class TestPlaintextWarning:
+    """credentials.yaml is plaintext; loading a populated one warns once."""
+
+    def _reset_flag(self):
+        import starmaker.credentials as creds_mod  # noqa: PLC0415
+        creds_mod._warned_plaintext = False
+
+    def test_warns_when_yaml_has_content(self, tmp_path, clean_env):
+        """A non-empty credentials.yaml triggers a PlaintextCredentialsWarning."""
+        from starmaker.credentials import PlaintextCredentialsWarning  # noqa: PLC0415
+        self._reset_flag()
+
+        creds_dir = tmp_path / ".starmaker"
+        creds_dir.mkdir()
+        (creds_dir / "credentials.yaml").write_text(
+            yaml.dump({"reddit_client_id": "abc"})
+        )
+
+        load_credentials = _import_load_credentials()
+        with pytest.warns(PlaintextCredentialsWarning):
+            load_credentials(credentials_dir=creds_dir)
+
+    def test_no_warning_when_yaml_absent(self, tmp_path, clean_env):
+        """A missing credentials.yaml must not warn about plaintext storage."""
+        from starmaker.credentials import PlaintextCredentialsWarning  # noqa: PLC0415
+        self._reset_flag()
+
+        empty_dir = tmp_path / ".starmaker"
+        empty_dir.mkdir()
+
+        load_credentials = _import_load_credentials()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", PlaintextCredentialsWarning)
+            load_credentials(credentials_dir=empty_dir)  # must not raise
+
+    def test_warns_only_once(self, tmp_path, clean_env):
+        """The plaintext warning fires at most once per process."""
+        from starmaker.credentials import PlaintextCredentialsWarning  # noqa: PLC0415
+        self._reset_flag()
+
+        creds_dir = tmp_path / ".starmaker"
+        creds_dir.mkdir()
+        (creds_dir / "credentials.yaml").write_text(
+            yaml.dump({"reddit_client_id": "abc"})
+        )
+
+        load_credentials = _import_load_credentials()
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always", PlaintextCredentialsWarning)
+            load_credentials(credentials_dir=creds_dir)
+            load_credentials(credentials_dir=creds_dir)
+        plaintext = [w for w in captured
+                     if issubclass(w.category, PlaintextCredentialsWarning)]
+        assert len(plaintext) == 1
