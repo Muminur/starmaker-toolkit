@@ -7,54 +7,99 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 
+from starmaker import __version__
 from starmaker.credentials import load_credentials, save_credentials, init_credentials
 from starmaker.utils.console import console
 
+#: Required credential keys for each platform's connectivity test. Used to fail
+#: fast with a clear message instead of raising ``KeyError`` mid-request.
+_REDDIT_KEYS = ("reddit_client_id", "reddit_client_secret", "reddit_username", "reddit_password")
+
 
 def _test_reddit(credentials: dict[str, str]) -> tuple[bool, str]:
-    """Test Reddit credentials by requesting an access token."""
-    try:
-        auth = (credentials["reddit_client_id"], credentials["reddit_client_secret"])
-        data = {
-            "grant_type": "password",
-            "username": credentials["reddit_username"],
-            "password": credentials["reddit_password"],
-        }
-        headers = {"User-Agent": f"StarMaker/0.2.0 (by /u/{credentials['reddit_username']})"}
+    """Test Reddit credentials by requesting an OAuth access token.
 
+    Distinguishes three outcomes: missing credentials, network failure, and a
+    successful round-trip (which may itself report an auth rejection from
+    Reddit). Network errors are caught and reported; unexpected errors are
+    allowed to propagate so genuine bugs are not masked.
+
+    Args:
+        credentials: Mapping of credential keys to values.
+
+    Returns:
+        ``(ok, message)`` where ``ok`` is True only on a verified token.
+    """
+    missing = [k for k in _REDDIT_KEYS if not credentials.get(k)]
+    if missing:
+        return False, f"Missing credentials: {', '.join(missing)}"
+
+    auth = (credentials["reddit_client_id"], credentials["reddit_client_secret"])
+    data = {
+        "grant_type": "password",
+        "username": credentials["reddit_username"],
+        "password": credentials["reddit_password"],
+    }
+    headers = {"User-Agent": f"StarMaker/{__version__} (by /u/{credentials['reddit_username']})"}
+
+    try:
         resp = requests.post(
             "https://www.reddit.com/api/v1/access_token",
             auth=auth, data=data, headers=headers, timeout=10,
         )
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
 
-        if resp.status_code == 200:
-            token_data = resp.json()
-            if "access_token" in token_data:
-                return True, f"Authenticated as u/{credentials['reddit_username']}"
-            return False, f"Auth failed: {token_data.get('error', 'unknown')}"
-        return False, f"HTTP {resp.status_code}"
-    except Exception as e:
-        return False, str(e)
+    if resp.status_code == 200:
+        token_data = resp.json()
+        if "access_token" in token_data:
+            return True, f"Authenticated as u/{credentials['reddit_username']}"
+        return False, f"Auth failed: {token_data.get('error', 'unknown')}"
+    return False, f"HTTP {resp.status_code}"
 
 
 def _test_devto(credentials: dict[str, str]) -> tuple[bool, str]:
-    """Test Dev.to API key by fetching user profile."""
+    """Test a Dev.to API key by fetching the authenticated user profile.
+
+    Network errors are caught and reported; unexpected errors propagate.
+
+    Args:
+        credentials: Mapping of credential keys to values.
+
+    Returns:
+        ``(ok, message)`` where ``ok`` is True only on a verified profile.
+    """
+    api_key = credentials.get("devto_api_key")
+    if not api_key:
+        return False, "Missing credentials: devto_api_key"
+
     try:
         resp = requests.get(
             "https://dev.to/api/users/me",
-            headers={"api-key": credentials["devto_api_key"]},
+            headers={"api-key": api_key},
             timeout=10,
         )
-        if resp.status_code == 200:
-            data = resp.json()
-            return True, f"Authenticated as @{data.get('username', 'unknown')}"
-        return False, f"HTTP {resp.status_code}"
-    except Exception as e:
-        return False, str(e)
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
+
+    if resp.status_code == 200:
+        data = resp.json()
+        return True, f"Authenticated as @{data.get('username', 'unknown')}"
+    return False, f"HTTP {resp.status_code}"
 
 
 def _test_discord(credentials: dict[str, str]) -> tuple[bool, str]:
-    """Test Discord webhook URLs by sending a GET request."""
+    """Test Discord webhook URLs by GETting each webhook's metadata.
+
+    Each webhook is probed independently; per-webhook network errors are
+    captured in the result string rather than aborting the whole check.
+
+    Args:
+        credentials: Mapping of credential keys to values.
+
+    Returns:
+        ``(ok, message)`` where ``ok`` is True if at least one webhook responds.
+    """
     urls = [u.strip() for u in credentials.get("discord_webhook_urls", "").split(",") if u.strip()]
     if not urls:
         return False, "No webhook URLs configured"
@@ -69,8 +114,8 @@ def _test_discord(credentials: dict[str, str]) -> tuple[bool, str]:
                 results.append(f"Webhook {i + 1}: OK (channel {channel})")
             else:
                 results.append(f"Webhook {i + 1}: HTTP {resp.status_code}")
-        except Exception as e:
-            results.append(f"Webhook {i + 1}: Error - {e}")
+        except requests.RequestException as e:
+            results.append(f"Webhook {i + 1}: Network error - {e}")
 
     ok_count = sum(1 for r in results if "OK" in r)
     return ok_count > 0, "; ".join(results)
