@@ -1,4 +1,13 @@
-"""GitHub API and local git analysis utilities."""
+"""GitHub API and local git analysis utilities.
+
+This module provides helpers to:
+
+* parse GitHub URLs into ``(owner, repo)`` tuples;
+* fetch aggregated repository metadata from the GitHub REST API using a
+  shared :class:`requests.Session` configured with automatic retries and
+  rate-limit awareness;
+* gather information from a local git checkout via the ``git`` CLI.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +17,20 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+#: GitHub REST API base URL.
+_API_BASE = "https://api.github.com"
+
+#: Headers sent with every GitHub API request.
+_DEFAULT_HEADERS = {"Accept": "application/vnd.github.v3+json"}
+
+#: Default per-request timeout (seconds).
+_TIMEOUT = 10
+
+#: Pattern used to extract the total page count from a ``Link`` header.
+_LINK_LAST_RE = re.compile(r'[?&]page=(\d+)>;\s*rel="last"')
 
 
 @dataclass
@@ -45,8 +68,123 @@ class RepoInfo:
     has_topics: bool = False
 
 
+def _build_session() -> requests.Session:
+    """Create a :class:`requests.Session` with retry/backoff on transient errors.
+
+    The session retries on connection errors and transient server-side
+    failures (HTTP 502/503/504) using exponential backoff. GitHub's own
+    rate-limit responses (403/429) are *not* auto-retried here; they are
+    surfaced explicitly to the caller so they can be reported clearly.
+
+    Returns:
+        A configured session shared across all requests in this module.
+    """
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=0.5,
+        status_forcelist=(502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session = requests.Session()
+    session.headers.update(_DEFAULT_HEADERS)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+#: Module-level session reused across requests (connection pooling + retries).
+_session = _build_session()
+
+
+def _is_rate_limited(resp: requests.Response) -> bool:
+    """Return ``True`` if *resp* indicates the GitHub rate limit was exhausted.
+
+    GitHub signals an exhausted primary rate limit with HTTP 403 (or 429) and
+    an ``X-RateLimit-Remaining: 0`` header.
+    """
+    if resp.status_code not in (403, 429):
+        return False
+    remaining = resp.headers.get("X-RateLimit-Remaining")
+    if resp.status_code == 429:
+        return True
+    return remaining == "0"
+
+
+def _raise_for_api_error(resp: requests.Response, owner: str, repo: str) -> None:
+    """Raise a descriptive error for a non-success GitHub API response.
+
+    Distinguishes the common failure modes so callers (and users) get an
+    actionable message instead of a bare status code:
+
+    * **rate limit** (403/429 with ``X-RateLimit-Remaining: 0``) -> includes
+      the ``Retry-After`` hint when present;
+    * **auth** (401, or 403 without rate-limit exhaustion) -> bad/missing token;
+    * **not found** (404) -> repo missing or private;
+    * anything else -> generic :class:`ConnectionError` with the status code.
+
+    Args:
+        resp: The HTTP response to inspect.
+        owner: Repository owner, used in the message.
+        repo: Repository name, used in the message.
+
+    Raises:
+        ValueError: For 404 (not found).
+        ConnectionError: For auth, rate-limit, and other unexpected statuses.
+    """
+    status = resp.status_code
+
+    if _is_rate_limited(resp):
+        retry_after = resp.headers.get("Retry-After")
+        hint = f" Retry after {retry_after}s." if retry_after else ""
+        raise ConnectionError(
+            "GitHub API rate limit exceeded. Set a GITHUB_TOKEN to raise the "
+            f"limit, or wait before retrying.{hint}"
+        )
+
+    if status == 401 or status == 403:
+        raise ConnectionError(
+            "GitHub API authentication failed "
+            f"(HTTP {status}). Check that your GITHUB_TOKEN is valid and has "
+            "the required scopes."
+        )
+
+    if status == 404:
+        raise ValueError(f"Repository not found: {owner}/{repo}")
+
+    raise ConnectionError(f"GitHub API error (HTTP {status}) for {owner}/{repo}")
+
+
+def _get(url: str, **kwargs: Any) -> requests.Response:
+    """Perform a GET request through the shared session.
+
+    Args:
+        url: Fully-qualified URL to fetch.
+        **kwargs: Extra arguments forwarded to :meth:`requests.Session.get`
+            (e.g. ``params``). A default ``timeout`` is applied if not given.
+
+    Returns:
+        The HTTP response.
+    """
+    kwargs.setdefault("timeout", _TIMEOUT)
+    return _session.get(url, **kwargs)
+
+
 def parse_github_url(url: str) -> tuple[str, str] | None:
-    """Extract owner and repo name from a GitHub URL."""
+    """Extract owner and repo name from a GitHub URL.
+
+    Accepts full URLs (``https://github.com/owner/repo``), SSH-style
+    (``git@github.com:owner/repo.git``), and the short ``owner/repo`` form.
+
+    Args:
+        url: The string to parse.
+
+    Returns:
+        A ``(owner, repo)`` tuple, or ``None`` if *url* does not match.
+    """
     patterns = [
         r"github\.com[:/]([^/]+)/([^/.]+)",
         r"^([^/]+)/([^/]+)$",
@@ -59,20 +197,28 @@ def parse_github_url(url: str) -> tuple[str, str] | None:
 
 
 def fetch_repo_info(repo_url: str) -> RepoInfo:
-    """Fetch repository info from GitHub API."""
+    """Fetch repository info from the GitHub API.
+
+    Args:
+        repo_url: A GitHub URL or ``owner/repo`` shorthand.
+
+    Returns:
+        A populated :class:`RepoInfo`.
+
+    Raises:
+        ValueError: If *repo_url* cannot be parsed or the repo is not found.
+        ConnectionError: On auth failure, rate limiting, or other API errors.
+    """
     parsed = parse_github_url(repo_url)
     if not parsed:
         raise ValueError(f"Could not parse GitHub URL: {repo_url}")
 
     owner, repo = parsed
     info = RepoInfo()
+    base = f"{_API_BASE}/repos/{owner}/{repo}"
 
-    # Basic repo info
-    resp = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}",
-        headers={"Accept": "application/vnd.github.v3+json"},
-        timeout=10,
-    )
+    # Basic repo info — this is the authoritative call; surface any error.
+    resp = _get(base)
     if resp.status_code == 200:
         data = resp.json()
         info.name = data.get("name", "")
@@ -93,26 +239,16 @@ def fetch_repo_info(repo_url: str) -> RepoInfo:
         info.has_description = bool(info.description)
         info.has_homepage = bool(info.homepage)
         info.has_topics = len(info.topics) > 0
-    elif resp.status_code == 404:
-        raise ValueError(f"Repository not found: {owner}/{repo}")
     else:
-        raise ConnectionError(f"GitHub API error: {resp.status_code}")
+        _raise_for_api_error(resp, owner, repo)
 
     # Languages
-    resp = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/languages",
-        headers={"Accept": "application/vnd.github.v3+json"},
-        timeout=10,
-    )
+    resp = _get(f"{base}/languages")
     if resp.status_code == 200:
         info.languages = resp.json()
 
     # Check for key files
-    resp = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/contents/",
-        headers={"Accept": "application/vnd.github.v3+json"},
-        timeout=10,
-    )
+    resp = _get(f"{base}/contents/")
     if resp.status_code == 200:
         files = {item["name"].lower() for item in resp.json() if isinstance(item, dict)}
         info.has_readme = any(f.startswith("readme") for f in files)
@@ -122,21 +258,13 @@ def fetch_repo_info(repo_url: str) -> RepoInfo:
 
     # Check for CI
     for ci_path in [".github/workflows", ".circleci", ".travis.yml"]:
-        resp = requests.get(
-            f"https://api.github.com/repos/{owner}/{repo}/contents/{ci_path}",
-            headers={"Accept": "application/vnd.github.v3+json"},
-            timeout=10,
-        )
+        resp = _get(f"{base}/contents/{ci_path}")
         if resp.status_code == 200:
             info.has_ci = True
             break
 
     # Releases
-    resp = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/releases",
-        headers={"Accept": "application/vnd.github.v3+json"},
-        timeout=10,
-    )
+    resp = _get(f"{base}/releases")
     if resp.status_code == 200:
         releases = resp.json()
         info.release_count = len(releases)
@@ -144,21 +272,16 @@ def fetch_repo_info(repo_url: str) -> RepoInfo:
         if releases:
             info.latest_release = releases[0].get("tag_name", "")
 
-    # Contributors (first page)
-    resp = requests.get(
-        f"https://api.github.com/repos/{owner}/{repo}/contributors",
+    # Contributors (first page only; total inferred from Link header)
+    resp = _get(
+        f"{base}/contributors",
         params={"per_page": 1, "anon": "true"},
-        headers={"Accept": "application/vnd.github.v3+json"},
-        timeout=10,
     )
     if resp.status_code == 200:
-        # Check Link header for total count
         link = resp.headers.get("Link", "")
-        if 'rel="last"' in link:
-            import re as _re
-            match = _re.search(r'page=(\d+)>; rel="last"', link)
-            if match:
-                info.contributor_count = int(match.group(1))
+        match = _LINK_LAST_RE.search(link)
+        if match:
+            info.contributor_count = int(match.group(1))
         else:
             info.contributor_count = len(resp.json())
 
@@ -166,7 +289,13 @@ def fetch_repo_info(repo_url: str) -> RepoInfo:
 
 
 def get_local_repo_info() -> dict[str, Any]:
-    """Gather info from the local git repository."""
+    """Gather info from the local git repository.
+
+    Returns:
+        A dict with any of ``remote_url``, ``commit_count``, ``last_commit``,
+        and ``branch`` that could be determined. Returns an empty/partial dict
+        if git is unavailable or a command times out.
+    """
     info: dict[str, Any] = {}
 
     try:
