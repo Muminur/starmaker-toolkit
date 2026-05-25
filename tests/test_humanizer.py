@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import re
 
 import pytest
@@ -356,3 +357,74 @@ class TestGenerateAllDrafts:
         drafts = generate_all_drafts(sample_content, subreddits=["python", "rust"])
         assert "reddit_r_python.md" in drafts
         assert "reddit_r_rust.md" in drafts
+
+
+# ---------------------------------------------------------------------------
+# Determinism via seed
+# ---------------------------------------------------------------------------
+class TestSeededDeterminism:
+    """A fixed seed must yield byte-identical output without disturbing global RNG."""
+
+    def test_generate_all_drafts_seed_is_byte_identical(
+        self, sample_content: ReadmeContent
+    ):
+        first = generate_all_drafts(sample_content, seed=1234)
+        second = generate_all_drafts(sample_content, seed=1234)
+        assert first == second
+        # Compare each file byte-for-byte for an explicit guarantee.
+        assert first.keys() == second.keys()
+        for name in first:
+            assert first[name].encode("utf-8") == second[name].encode("utf-8")
+
+    def test_reddit_seed_is_byte_identical(self, sample_content: ReadmeContent):
+        subs = ["opensource", "rust"]
+        a = humanize_for_reddit(sample_content, subreddits=subs, seed=99)
+        b = humanize_for_reddit(sample_content, subreddits=subs, seed=99)
+        assert a == b
+
+    def test_twitter_seed_is_byte_identical(self, sample_content: ReadmeContent):
+        a = humanize_for_twitter(sample_content, seed=7)
+        b = humanize_for_twitter(sample_content, seed=7)
+        assert a == b
+
+    def test_hackernews_seed_is_byte_identical(self, sample_content: ReadmeContent):
+        a = humanize_for_hackernews(sample_content, seed=42)
+        b = humanize_for_hackernews(sample_content, seed=42)
+        assert a == b
+
+    def test_different_seeds_can_differ(self, sample_content: ReadmeContent):
+        """At least one platform should vary across distinct seeds."""
+        seen = set()
+        for s in range(40):
+            drafts = humanize_for_reddit(
+                sample_content, subreddits=["test"], seed=s
+            )
+            body = re.search(
+                r"\*\*Body:\*\*\s*\n\n(.+)",
+                drafts["reddit_r_test.md"],
+                re.DOTALL,
+            ).group(1)
+            seen.add(body.split("\n")[0])
+        assert len(seen) >= 2
+
+    def test_seed_does_not_disturb_global_random(
+        self, sample_content: ReadmeContent
+    ):
+        random.seed(0)
+        expected = [random.random() for _ in range(5)]
+
+        random.seed(0)
+        generate_all_drafts(sample_content, seed=2024)
+        after = [random.random() for _ in range(5)]
+
+        assert expected == after
+
+    def test_seedless_output_still_valid_format(
+        self, sample_content: ReadmeContent
+    ):
+        """Default (seed=None) path keeps the existing draft contract."""
+        drafts = generate_all_drafts(sample_content)
+        assert any(f.startswith("reddit_r_") for f in drafts)
+        assert "twitter_single.md" in drafts
+        for name, body in drafts.items():
+            assert isinstance(body, str) and body

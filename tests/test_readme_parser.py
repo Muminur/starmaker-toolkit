@@ -127,6 +127,64 @@ class TestReadmeParser:
         assert content.highlights == []
 
 
+class TestMalformedReadme:
+    """Malformed/broken markdown should degrade gracefully, never raise."""
+
+    def test_whitespace_only(self) -> None:
+        content = parse_readme("   \n\n\t  \n")
+        assert content.title == ""
+        assert content.sections == {}
+        assert content.highlights == []
+        assert content.tags == []
+
+    def test_no_headings_just_prose(self) -> None:
+        content = parse_readme(
+            "Some loose prose without any markdown headings at all. "
+            "It mentions python and rust though."
+        )
+        assert content.title == ""
+        assert content.sections == {}
+        # tag inference still works on the raw text
+        assert "python" in content.tags
+        assert "rust" in content.tags
+
+    def test_unterminated_code_fence(self) -> None:
+        # A code fence that is never closed must not crash parsing.
+        text = "# Proj\n\n```python\nprint('oops never closed')\n## Features\n- one\n"
+        content = parse_readme(text)
+        assert content.title == "Proj"
+
+    def test_heading_only_no_content(self) -> None:
+        content = parse_readme("## Features\n## Install\n")
+        # Headings with no body produce empty section content, not errors.
+        assert content.sections.get("Features", "") == ""
+        assert content.highlights == []
+
+    def test_dangling_bold_markers(self) -> None:
+        content = parse_readme("# Proj\n\n**unterminated bold start\nplain line\n")
+        # Should not match as a tagline (no closing **) and must not raise.
+        assert content.title == "Proj"
+        assert content.tagline == ""
+
+    def test_build_config_handles_empty(self) -> None:
+        config = build_config_from_readme("")
+        assert config.project.name == ""
+        assert config.project.highlights == []
+        assert config.promotion.reddit == {}
+
+    def test_build_config_handles_none(self) -> None:
+        # Defensive: None should be coerced to empty, not raise.
+        config = build_config_from_readme(None)  # type: ignore[arg-type]
+        assert config.project.name == ""
+
+    def test_get_top_sentences_empty(self) -> None:
+        assert get_top_sentences("") == []
+        assert get_top_sentences("   ") == []
+
+    def test_extract_keywords_empty(self) -> None:
+        assert _extract_keywords("") == []
+
+
 class TestSentenceScorer:
     """Tests for sentence scoring logic."""
 
