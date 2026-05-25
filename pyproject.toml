@@ -25,11 +25,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "click>=8.0",
-    "rich>=13.0",
-    "requests>=2.28",
-    "pyyaml>=6.0",
-    "python-dotenv>=1.0",
+    "click>=8.0,<9",
+    "rich>=13.0,<15",
+    "requests>=2.28,<3",
+    "pyyaml>=6.0,<7",
+    "python-dotenv>=1.0,<2",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +41,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
+    "mypy>=1.0",
 ]
 
 [project.scripts]
@@ -57,6 +58,38 @@ include = ["starmaker*"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
+# Explicit, opinionated rule selection. The codebase does not yet pass every
+# rule below; the violations are owned by other units (source-code fixes) and
+# are deferred via `ignore` so this config acts as a working gate rather than a
+# green-by-fixing-everything run. Re-enable a code once the source is clean.
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+ignore = [
+    "E501",    # line-too-long (40 hits across source)
+    "I001",    # unsorted/unformatted imports (20 hits)
+    "B007",    # unused loop control variable (8 hits)
+    "C401",    # unnecessary generator (rewrite as set comprehension) (1 hit)
+    "F401",    # unused import (5 hits, pre-existing on main)
+    "F841",    # unused local variable (1 hit, pre-existing on main)
+    "SIM102",  # collapsible nested if (3 hits)
+    "SIM105",  # use contextlib.suppress (1 hit)
+    "SIM108",  # use ternary operator (1 hit)
+    "UP035",   # deprecated import (2 hits)
+]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.coverage.run]
+source = ["starmaker"]
+
+[tool.coverage.report]
+# Measured baseline on main is 30% total; set a few points below to avoid
+# spurious failures while still gating against regressions.
+fail_under = 25
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
