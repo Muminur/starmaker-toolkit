@@ -30,37 +30,49 @@ def _show_banner() -> None:
     ))
 
 
+#: Special menu key that exits the interactive menu without running a command.
+_QUIT_KEY = "q"
+
+#: Ordered descriptions for each interactive-menu entry. The command callables
+#: themselves live in ``MENU_COMMANDS`` (built below, once the commands are
+#: defined). Keeping the two in sync is enforced by ``tests/test_cli.py``.
+_MENU_DESCRIPTIONS: dict[str, str] = {
+    "1": "Initialize starmaker.yaml config",
+    "2": "Generate promotional post drafts",
+    "3": "Publish drafts to platforms",
+    "4": "Audit repo for star-worthiness",
+    "5": "Find awesome-lists & generate PRs",
+    "6": "Generate comparison table",
+    "7": "Analyze & enhance README",
+    "8": "View API credential status",
+    "9": "Auto-setup credentials (browser wizard)",
+    "a": "Auto-generate posts from README (NLP)",
+    "0": "Run everything",
+    _QUIT_KEY: "Exit",
+}
+
+
 def _interactive_menu() -> None:
-    """Show interactive menu when no subcommand given."""
+    """Show interactive menu when no subcommand given.
+
+    Dispatch uses the explicit :data:`MENU_COMMANDS` registry, which maps each
+    menu key directly to its Click command callable. Renaming a command
+    function therefore fails loudly at import time rather than silently falling
+    back to ``all``.
+    """
     _show_banner()
 
-    choices = {
-        "1": ("init", "Initialize starmaker.yaml config"),
-        "2": ("draft", "Generate promotional post drafts"),
-        "3": ("post", "Publish drafts to platforms"),
-        "4": ("audit", "Audit repo for star-worthiness"),
-        "5": ("awesome", "Find awesome-lists & generate PRs"),
-        "6": ("compare", "Generate comparison table"),
-        "7": ("readme", "Analyze & enhance README"),
-        "8": ("credentials", "View API credential status"),
-        "9": ("setup", "Auto-setup credentials (browser wizard)"),
-        "a": ("auto_post", "Auto-generate posts from README (NLP)"),
-        "0": ("all", "Run everything"),
-        "q": ("quit", "Exit"),
-    }
-
     console.print("\n[bold]What would you like to do?[/bold]\n")
-    for key, (cmd, desc) in choices.items():
+    for key, desc in _MENU_DESCRIPTIONS.items():
         console.print(f"  [cyan]{key}[/cyan]) {desc}")
 
-    choice = Prompt.ask("\nSelect", choices=list(choices.keys()), default="a")
+    choice = Prompt.ask("\nSelect", choices=list(_MENU_DESCRIPTIONS.keys()), default="a")
 
-    if choice == "q":
+    if choice == _QUIT_KEY:
         return
 
-    cmd = choices[choice][0]
     ctx = click.Context(cli)
-    ctx.invoke(globals().get(f"cmd_{cmd}", cmd_all))
+    ctx.invoke(MENU_COMMANDS[choice])
 
 
 @click.group(invoke_without_command=True)
@@ -383,6 +395,26 @@ def cmd_all(output: str, url: str | None) -> None:
         title="StarMaker Complete",
         border_style="green",
     ))
+
+
+#: Explicit registry mapping interactive-menu keys to their Click command
+#: callables. Defined after the commands so each value is a real reference:
+#: renaming a command function breaks this mapping at import time (NameError),
+#: instead of silently falling back to ``cmd_all`` as the old ``globals()``
+#: lookup did. Keys mirror ``_MENU_DESCRIPTIONS`` (minus the quit key).
+MENU_COMMANDS: dict[str, click.Command] = {
+    "1": cmd_init,
+    "2": cmd_draft,
+    "3": cmd_post,
+    "4": cmd_audit,
+    "5": cmd_awesome,
+    "6": cmd_compare,
+    "7": cmd_readme,
+    "8": cmd_credentials,
+    "9": cmd_setup,
+    "a": cmd_auto_post,
+    "0": cmd_all,
+}
 
 
 def main() -> None:
