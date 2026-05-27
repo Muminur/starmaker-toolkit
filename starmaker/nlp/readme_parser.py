@@ -112,7 +112,9 @@ def parse_readme(text: str) -> ReadmeContent:
 
 
 def _extract_title(text: str) -> str:
-    """Extract the title from the first # heading."""
+    """Extract the title from the first ``# `` heading, or ``""`` if none exists."""
+    if not text:
+        return ""
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith("# ") and not stripped.startswith("## "):
@@ -121,7 +123,9 @@ def _extract_title(text: str) -> str:
 
 
 def _extract_tagline(text: str) -> str:
-    """Extract the tagline from the first bold-only line."""
+    """Extract the tagline from the first bold-only (``**...**``) line, or ``""``."""
+    if not text:
+        return ""
     for line in text.splitlines():
         stripped = line.strip()
         # Match lines that are entirely bold text: **...**
@@ -132,7 +136,13 @@ def _extract_tagline(text: str) -> str:
 
 
 def _extract_description(text: str) -> str:
-    """Extract the first regular paragraph, skipping badges, headings, bold lines, and blanks."""
+    """Extract the first regular paragraph, skipping badges, headings, bold lines, and blanks.
+
+    Returns ``""`` when there is no qualifying paragraph (e.g. empty or
+    heading-only input).
+    """
+    if not text:
+        return ""
     clean_text = _filter_code_blocks(text)
     lines = clean_text.splitlines()
 
@@ -182,17 +192,25 @@ def _filter_badges(lines: list[str]) -> list[str]:
 
 
 def _filter_code_blocks(text: str) -> str:
-    """Remove fenced code blocks from text."""
+    """Remove fenced ``` ``` `` ``` `` code blocks from *text*; returns ``""`` for falsy input."""
+    if not text:
+        return ""
     # Remove ```...``` blocks
     result = re.sub(r"```[^\n]*\n.*?```", "", text, flags=re.DOTALL)
     return result
 
 
 def _extract_sections(text: str) -> dict[str, str]:
-    """Parse ## Heading sections into a dict of heading -> content."""
+    """Parse ``## Heading`` sections into a ``{heading: content}`` dict.
+
+    Returns an empty dict when *text* is empty or contains no ``##`` headings.
+    """
     sections: dict[str, str] = {}
     current_heading: str | None = None
     current_lines: list[str] = []
+
+    if not text:
+        return sections
 
     clean_text = _filter_code_blocks(text)
 
@@ -216,7 +234,13 @@ def _extract_sections(text: str) -> dict[str, str]:
 
 
 def _extract_highlights(sections: dict[str, str]) -> list[str]:
-    """Extract bullet items from a features-like section."""
+    """Extract bullet (``- ``) items from the first features-like section.
+
+    Returns an empty list when *sections* is empty or no recognised feature
+    section is present.
+    """
+    if not sections:
+        return []
     feature_keys = ["Key Features", "Features", "Highlights", "Why"]
     target_content = ""
 
@@ -247,7 +271,11 @@ def _score_sentences(text: str, project_name: str = "") -> list[tuple[float, str
     - Position: earlier sentences score higher
     - Project name: sentences containing the project name get a boost
     - Length: medium-length sentences preferred (penalise very short)
+
+    Returns an empty list when *text* is empty or whitespace-only.
     """
+    if not text or not text.strip():
+        return []
     # Split into sentences
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     sentences = [s.strip() for s in sentences if s.strip()]
@@ -283,13 +311,18 @@ def _score_sentences(text: str, project_name: str = "") -> list[tuple[float, str
 
 
 def get_top_sentences(text: str, n: int = 3, project_name: str = "") -> list[str]:
-    """Return the top N scored sentences from text."""
+    """Return the top *n* scored sentences from *text* (fewer if not enough exist)."""
     scored = _score_sentences(text, project_name)
     return [sentence for _, sentence in scored[:n]]
 
 
 def _extract_keywords(text: str, max_count: int = 10) -> list[str]:
-    """Extract the most frequent non-stopword terms from text."""
+    """Extract up to *max_count* most frequent non-stopword terms from *text*.
+
+    Returns an empty list when *text* is empty.
+    """
+    if not text:
+        return []
     # Tokenize: split on non-alphanumeric characters
     tokens = re.findall(r"[a-zA-Z]{2,}", text.lower())
 
@@ -302,7 +335,9 @@ def _extract_keywords(text: str, max_count: int = 10) -> list[str]:
 
 
 def _infer_tags(text: str) -> list[str]:
-    """Detect technology/topic tags from content."""
+    """Detect known technology/topic tags present in *text* (empty list if none)."""
+    if not text:
+        return []
     text_lower = text.lower()
     tags: list[str] = []
 
@@ -316,7 +351,9 @@ def _infer_tags(text: str) -> list[str]:
 
 
 def _detect_repo_url(text: str) -> str:
-    """Find a GitHub or GitLab repository URL in text."""
+    """Find the first GitHub/GitLab repository URL in *text* (``""`` if none)."""
+    if not text:
+        return ""
     # Match github.com/user/repo or gitlab.com/user/repo
     match = re.search(
         r"https?://(?:www\.)?(?:github|gitlab)\.com/[\w.-]+/[\w.-]+",
@@ -326,8 +363,12 @@ def _detect_repo_url(text: str) -> str:
 
 
 def build_config_from_readme(readme_text: str, repo_url: str = "") -> StarMakerConfig:
-    """Build a StarMakerConfig from parsed README content."""
-    content = parse_readme(readme_text)
+    """Build a :class:`StarMakerConfig` from parsed README content.
+
+    Empty or malformed *readme_text* yields a config populated with sensible
+    empty defaults rather than raising.
+    """
+    content = parse_readme(readme_text or "")
 
     # Use provided repo_url or detected one
     final_repo = repo_url or content.repo_url

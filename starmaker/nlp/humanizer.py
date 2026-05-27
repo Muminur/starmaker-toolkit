@@ -10,9 +10,17 @@ Output formats match the exact draft file formats expected by
 from __future__ import annotations
 
 import random
-from typing import Sequence
+from typing import Protocol, Sequence
 
 from starmaker.nlp.readme_parser import ReadmeContent
+
+
+class _RNG(Protocol):
+    """Minimal random-source protocol satisfied by both ``random`` and ``random.Random``."""
+
+    def choice(self, seq: Sequence[str]) -> str: ...
+
+    def shuffle(self, x: list[str]) -> None: ...
 
 # ---------------------------------------------------------------------------
 # Template pools
@@ -61,9 +69,22 @@ DEFAULT_SUBREDDITS: list[str] = ["opensource", "commandline", "programming"]
 # ---------------------------------------------------------------------------
 
 
-def _pick(templates: Sequence[str], **kwargs: str) -> str:
-    """Pick a random template and format it."""
-    return random.choice(templates).format(**kwargs)
+def _resolve_rng(seed: int | None) -> _RNG:
+    """Return a random source for this generation.
+
+    When *seed* is ``None`` the shared global :mod:`random` module is returned,
+    preserving the original non-deterministic behaviour. When *seed* is an int,
+    a dedicated :class:`random.Random` instance is returned so output is
+    reproducible without disturbing the global RNG state.
+    """
+    if seed is None:
+        return random
+    return random.Random(seed)
+
+
+def _pick(templates: Sequence[str], rng: _RNG = random, **kwargs: str) -> str:
+    """Pick a random template from *templates* using *rng* and format it with *kwargs*."""
+    return rng.choice(templates).format(**kwargs)
 
 
 def _bullet_highlights(highlights: list[str], max_items: int = 6) -> str:
@@ -93,13 +114,18 @@ def _truncate(text: str, max_len: int, suffix: str = "...") -> str:
 def humanize_for_reddit(
     content: ReadmeContent,
     subreddits: list[str] | None = None,
+    seed: int | None = None,
 ) -> dict[str, str]:
     """Generate Reddit post drafts.
 
     Returns ``{"reddit_r_{sub}.md": formatted_content}`` for each subreddit.
     Format matches ``_parse_reddit_draft()`` in ``post.py``.
+
+    When *seed* is provided, template/closer selection is deterministic via a
+    local RNG (the global ``random`` state is left untouched).
     """
     subs = subreddits or list(DEFAULT_SUBREDDITS)
+    rng = _resolve_rng(seed)
 
     highlights_md = _bullet_highlights(content.highlights)
     tech_md = ", ".join(content.tech_stack) if content.tech_stack else ""
@@ -108,11 +134,12 @@ def humanize_for_reddit(
     for sub in subs:
         opener = _pick(
             REDDIT_OPENERS,
+            rng=rng,
             sub=sub,
             name=content.title,
             tagline=content.tagline,
         )
-        closer = random.choice(REDDIT_CLOSERS)
+        closer = rng.choice(REDDIT_CLOSERS)
 
         title = f"I built {content.title} \u2014 {content.tagline}"
         title = _truncate(title, 300)
@@ -149,17 +176,25 @@ def humanize_for_reddit(
     return drafts
 
 
-def humanize_for_devto(content: ReadmeContent) -> dict[str, str]:
+def humanize_for_devto(
+    content: ReadmeContent,
+    seed: int | None = None,
+) -> dict[str, str]:
     """Generate a Dev.to article draft.
 
     Returns ``{"devto_article.md": formatted_content}``.
     Format matches ``_parse_devto_draft()`` in ``post.py``.
+
+    When *seed* is provided, intro template selection is deterministic via a
+    local RNG (the global ``random`` state is left untouched).
     """
+    rng = _resolve_rng(seed)
     tags = content.tags[:4]
     tags_str = ", ".join(tags) if tags else "opensource"
 
     intro = _pick(
         DEVTO_INTROS,
+        rng=rng,
         name=content.title,
         tagline=content.tagline,
         description=content.description,
@@ -202,19 +237,26 @@ If you find it useful, a star on GitHub would be appreciated!
     return {"devto_article.md": article}
 
 
-def humanize_for_twitter(content: ReadmeContent) -> dict[str, str]:
+def humanize_for_twitter(
+    content: ReadmeContent,
+    seed: int | None = None,
+) -> dict[str, str]:
     """Generate a Twitter/X single post draft.
 
     Returns ``{"twitter_single.md": formatted_content}``.
     Format matches ``_parse_twitter_single()`` in ``post.py``.
     The tweet text MUST be under 280 characters.
+
+    When *seed* is provided, template ordering is deterministic via a local
+    RNG (the global ``random`` state is left untouched).
     """
+    rng = _resolve_rng(seed)
     hashtags = _hashtags(content.tags, limit=3)
 
     # Try each template until one fits in 280 chars
     tweet = ""
     templates = list(TWEET_TEMPLATES)
-    random.shuffle(templates)
+    rng.shuffle(templates)
 
     for tmpl in templates:
         candidate = tmpl.format(
@@ -240,11 +282,17 @@ def humanize_for_twitter(content: ReadmeContent) -> dict[str, str]:
     return {"twitter_single.md": draft}
 
 
-def humanize_for_discord(content: ReadmeContent) -> dict[str, str]:
+def humanize_for_discord(
+    content: ReadmeContent,
+    seed: int | None = None,
+) -> dict[str, str]:
     """Generate a Discord message draft.
 
     Returns ``{"discord.md": formatted_content}``.
     Format matches ``_parse_discord_draft()`` in ``post.py``.
+
+    The Discord draft uses no randomized templates, so output is already
+    deterministic; *seed* is accepted for a consistent humanizer API.
     """
     highlights_md = "\n".join(
         f"\u2022 {h}" for h in content.highlights
@@ -283,16 +331,24 @@ def humanize_for_discord(content: ReadmeContent) -> dict[str, str]:
     return {"discord.md": draft}
 
 
-def humanize_for_hackernews(content: ReadmeContent) -> dict[str, str]:
+def humanize_for_hackernews(
+    content: ReadmeContent,
+    seed: int | None = None,
+) -> dict[str, str]:
     """Generate a Hacker News Show HN draft.
 
     Returns ``{"hackernews.md": formatted_content}``.
     Format matches ``_parse_hn_draft()`` in ``post.py``.
+
+    When *seed* is provided, title template selection is deterministic via a
+    local RNG (the global ``random`` state is left untouched).
     """
+    rng = _resolve_rng(seed)
     short_desc = content.description.split(".")[0].strip() if content.description else content.tagline
 
     title = _pick(
         HN_TITLES,
+        rng=rng,
         name=content.title,
         tagline=content.tagline,
         short_desc=short_desc,
@@ -334,16 +390,21 @@ def humanize_for_hackernews(content: ReadmeContent) -> dict[str, str]:
 def generate_all_drafts(
     content: ReadmeContent,
     subreddits: list[str] | None = None,
+    seed: int | None = None,
 ) -> dict[str, str]:
     """Generate drafts for all platforms.
 
     Calls each platform humanizer and merges the results into a single dict
     of ``filename -> content``.
+
+    When *seed* is provided, the same seed is forwarded to every platform
+    humanizer, making the full draft set reproducible without touching the
+    global ``random`` state.
     """
     drafts: dict[str, str] = {}
-    drafts.update(humanize_for_reddit(content, subreddits=subreddits))
-    drafts.update(humanize_for_devto(content))
-    drafts.update(humanize_for_twitter(content))
-    drafts.update(humanize_for_discord(content))
-    drafts.update(humanize_for_hackernews(content))
+    drafts.update(humanize_for_reddit(content, subreddits=subreddits, seed=seed))
+    drafts.update(humanize_for_devto(content, seed=seed))
+    drafts.update(humanize_for_twitter(content, seed=seed))
+    drafts.update(humanize_for_discord(content, seed=seed))
+    drafts.update(humanize_for_hackernews(content, seed=seed))
     return drafts
