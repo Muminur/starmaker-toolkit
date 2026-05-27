@@ -1,5 +1,6 @@
 # StarMaker
 
+[![CI](https://github.com/Muminur/starmaker-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/Muminur/starmaker-toolkit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 
@@ -291,8 +292,15 @@ pytest
 pytest --cov=starmaker
 
 # Lint
-ruff check starmaker/ tests/
+ruff check .
+
+# Type-check
+mypy starmaker
 ```
+
+Every push and pull request runs [CI](.github/workflows/ci.yml) (ruff, pytest with
+coverage, and mypy) across Python 3.9–3.12. Optionally enable the local pre-commit
+hooks with `pre-commit install`.
 
 ## How It Works
 
@@ -301,6 +309,12 @@ StarMaker uses **official platform APIs** with your own credentials. The NLP-bas
 - **Credential management**: Multi-source loading (env > .env > YAML) with file permission hardening
 - **Browser automation**: Camoufox with anti-detection for platforms requiring browser interaction
 - **Post generation**: Positional sentence scoring, keyword extraction, tag inference, and template-based humanization
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development
+workflow (setup, tests, linting, and commit conventions), [DEVELOPMENT.md](DEVELOPMENT.md)
+for an architecture overview, and [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## License
 

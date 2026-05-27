@@ -18,4 +18,17 @@ htmlcov/
 drafts/
 starmaker.yaml
 credentials.yaml
+
+# Local tooling / planning / AI-assistant files — never commit
 CLAUDE.md
+.omc/
+.serena/
+.claude/
+planning.md
+PLANNING.md
+PLAN.md
+PRD.md
+prd.docx
+tasks.md
+TASKS.md
+docs/plan/
