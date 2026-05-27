@@ -11,6 +11,14 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.prompt import Confirm
 
+from starmaker.commands._constants import (
+    PLATFORM_DEVTO,
+    PLATFORM_DISCORD,
+    PLATFORM_HACKERNEWS,
+    PLATFORM_REDDIT,
+    PLATFORM_TWITTER,
+    label_for_filename,
+)
 from starmaker.nlp.readme_parser import parse_readme, build_config_from_readme
 from starmaker.nlp.humanizer import generate_all_drafts
 from starmaker.utils.console import console
@@ -93,11 +101,11 @@ def run(
             humanize_for_discord, humanize_for_hackernews,
         )
         generators = {
-            "reddit": lambda: humanize_for_reddit(content, subreddits),
-            "devto": lambda: humanize_for_devto(content),
-            "twitter": lambda: humanize_for_twitter(content),
-            "discord": lambda: humanize_for_discord(content),
-            "hackernews": lambda: humanize_for_hackernews(content),
+            PLATFORM_REDDIT: lambda: humanize_for_reddit(content, subreddits),
+            PLATFORM_DEVTO: lambda: humanize_for_devto(content),
+            PLATFORM_TWITTER: lambda: humanize_for_twitter(content),
+            PLATFORM_DISCORD: lambda: humanize_for_discord(content),
+            PLATFORM_HACKERNEWS: lambda: humanize_for_hackernews(content),
         }
         if platform not in generators:
             console.print(f"[red]Unknown platform: {platform}[/red]")
@@ -118,22 +126,13 @@ def run(
 
     for filename, file_content in drafts.items():
         filepath = out_path / filename
-        filepath.write_text(file_content, encoding="utf-8")
+        try:
+            filepath.write_text(file_content, encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[red]Failed to write {filepath}: {exc}[/red]")
+            continue
 
-        # Determine platform from filename
-        plat = "unknown"
-        if "reddit" in filename:
-            plat = "Reddit"
-        elif "devto" in filename:
-            plat = "Dev.to"
-        elif "twitter" in filename:
-            plat = "Twitter/X"
-        elif "discord" in filename:
-            plat = "Discord"
-        elif "hackernews" in filename:
-            plat = "Hacker News"
-
-        table.add_row(filename, plat, f"{len(file_content)} chars")
+        table.add_row(filename, label_for_filename(filename), f"{len(file_content)} chars")
 
     console.print(table)
     console.print(f"\n[green]Drafts saved to {out_path}/[/green]")

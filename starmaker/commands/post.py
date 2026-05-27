@@ -9,6 +9,17 @@ from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 
+from starmaker.commands._constants import (
+    BROWSER_PLATFORMS,
+    DRAFT_FILENAMES,
+    PLATFORM_DEVTO,
+    PLATFORM_DISCORD,
+    PLATFORM_HACKERNEWS,
+    PLATFORM_REDDIT,
+    PLATFORM_TWITTER,
+    REDDIT_DRAFT_GLOB,
+    REDDIT_DRAFT_PREFIX,
+)
 from starmaker.config import StarMakerConfig
 from starmaker.credentials import load_credentials, init_credentials, CREDENTIALS_DIR
 from starmaker.publishers import PUBLISHERS
@@ -20,8 +31,8 @@ def _parse_reddit_draft(filepath: Path) -> tuple[str, str, str]:
     """Extract title, body, and subreddit from a Reddit draft file."""
     content = filepath.read_text(encoding="utf-8")
 
-    # Extract subreddit from filename
-    match = re.search(r"reddit_r_(.+)\.md$", filepath.name)
+    # Extract subreddit from filename (e.g. ``reddit_r_python.md`` -> ``python``)
+    match = re.search(rf"{re.escape(REDDIT_DRAFT_PREFIX)}(.+)\.md$", filepath.name)
     subreddit = match.group(1) if match else "test"
 
     # Extract title
@@ -160,11 +171,11 @@ def run(
     posts: list[dict] = []
 
     for plat in platforms_to_post:
-        if plat == "reddit":
-            for draft_file in sorted(drafts.glob("reddit_r_*.md")):
+        if plat == PLATFORM_REDDIT:
+            for draft_file in sorted(drafts.glob(REDDIT_DRAFT_GLOB)):
                 title, body, subreddit = _parse_reddit_draft(draft_file)
                 posts.append({
-                    "platform": "reddit",
+                    "platform": PLATFORM_REDDIT,
                     "file": draft_file.name,
                     "title": title,
                     "body": body,
@@ -172,12 +183,12 @@ def run(
                     "display": f"Reddit r/{subreddit}",
                 })
 
-        elif plat == "hackernews":
-            hn_file = drafts / "hackernews.md"
+        elif plat == PLATFORM_HACKERNEWS:
+            hn_file = drafts / DRAFT_FILENAMES[PLATFORM_HACKERNEWS]
             if hn_file.exists():
                 title, text, url = _parse_hn_draft(hn_file)
                 posts.append({
-                    "platform": "hackernews",
+                    "platform": PLATFORM_HACKERNEWS,
                     "file": hn_file.name,
                     "title": title,
                     "body": text,
@@ -185,12 +196,12 @@ def run(
                     "display": "Hacker News (Show HN)",
                 })
 
-        elif plat == "devto":
-            devto_file = drafts / "devto_article.md"
+        elif plat == PLATFORM_DEVTO:
+            devto_file = drafts / DRAFT_FILENAMES[PLATFORM_DEVTO]
             if devto_file.exists():
                 title, body, tags = _parse_devto_draft(devto_file)
                 posts.append({
-                    "platform": "devto",
+                    "platform": PLATFORM_DEVTO,
                     "file": devto_file.name,
                     "title": title,
                     "body": body,
@@ -198,12 +209,12 @@ def run(
                     "display": "Dev.to (draft)",
                 })
 
-        elif plat == "twitter":
-            tw_file = drafts / "twitter_single.md"
+        elif plat == PLATFORM_TWITTER:
+            tw_file = drafts / DRAFT_FILENAMES[PLATFORM_TWITTER]
             if tw_file.exists():
                 tweet = _parse_twitter_single(tw_file)
                 posts.append({
-                    "platform": "twitter",
+                    "platform": PLATFORM_TWITTER,
                     "file": tw_file.name,
                     "title": "",
                     "body": tweet,
@@ -211,12 +222,12 @@ def run(
                     "display": "Twitter/X",
                 })
 
-        elif plat == "discord":
-            dc_file = drafts / "discord.md"
+        elif plat == PLATFORM_DISCORD:
+            dc_file = drafts / DRAFT_FILENAMES[PLATFORM_DISCORD]
             if dc_file.exists():
                 message = _parse_discord_draft(dc_file)
                 posts.append({
-                    "platform": "discord",
+                    "platform": PLATFORM_DISCORD,
                     "file": dc_file.name,
                     "title": "",
                     "body": message,
@@ -240,7 +251,7 @@ def run(
         if pub_cls:
             pub = pub_cls()
             has_creds = pub.validate_credentials(credentials)
-            status = "[green]Ready[/green]" if has_creds else "[yellow]Browser[/yellow]" if post["platform"] in ("hackernews", "twitter") else "[red]Missing keys[/red]"
+            status = "[green]Ready[/green]" if has_creds else "[yellow]Browser[/yellow]" if post["platform"] in BROWSER_PLATFORMS else "[red]Missing keys[/red]"
         else:
             status = "[red]Unknown[/red]"
 
@@ -274,7 +285,7 @@ def run(
 
         pub = pub_cls()
 
-        if not pub.validate_credentials(credentials) and post["platform"] not in ("hackernews", "twitter"):
+        if not pub.validate_credentials(credentials) and post["platform"] not in BROWSER_PLATFORMS:
             missing = pub.get_missing_keys(credentials)
             results.append(PostResult(
                 platform=post["display"],
