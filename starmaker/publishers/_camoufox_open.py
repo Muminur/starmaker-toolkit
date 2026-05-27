@@ -91,14 +91,7 @@ def open_in_camoufox(
                 pass
     """)
 
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        timeout=600,
-        capture_output=False,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Camoufox subprocess exited with code {result.returncode}")
+    _run_camoufox_script(script)
 
 
 def open_twitter_camoufox(tweet_text: str) -> None:
@@ -196,11 +189,33 @@ def open_twitter_camoufox(tweet_text: str) -> None:
                 pass
     """)
 
+    _run_camoufox_script(script)
+
+
+def _run_camoufox_script(script: str) -> None:
+    """Run a generated Camoufox driver script in a subprocess.
+
+    stderr is captured so that a failing subprocess produces a diagnosable
+    error message instead of a bare exit code. stdout is left inherited so
+    the script's live progress messages still reach the user's terminal.
+
+    Args:
+        script: The Python source to execute via ``python -c``.
+
+    Raises:
+        RuntimeError: If the subprocess exits with a non-zero status. The
+            tail of captured stderr (if any) is included in the message.
+    """
     result = subprocess.run(
         [sys.executable, "-c", script],
         timeout=600,
-        capture_output=False,
+        stderr=subprocess.PIPE,
+        text=True,
     )
 
     if result.returncode != 0:
-        raise RuntimeError(f"Camoufox subprocess exited with code {result.returncode}")
+        stderr_tail = (result.stderr or "").strip()[-500:]
+        detail = f": {stderr_tail}" if stderr_tail else ""
+        raise RuntimeError(
+            f"Camoufox subprocess exited with code {result.returncode}{detail}"
+        )

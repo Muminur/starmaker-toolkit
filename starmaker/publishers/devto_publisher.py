@@ -17,14 +17,25 @@ class DevtoPublisher(BasePublisher):
     """
 
     platform_name = "Dev.to"
-    requires_keys = ["devto_api_key"]
+    requires_keys = ("devto_api_key",)
 
     def validate_credentials(self, credentials: dict[str, str]) -> bool:
+        """Return True when the Dev.to API key is present."""
         missing = self.get_missing_keys(credentials)
         return len(missing) == 0
 
     def publish(self, title: str, body: str, credentials: dict[str, str], **kwargs) -> PostResult:
-        """Create a draft article on Dev.to."""
+        """Create an article on Dev.to (draft by default).
+
+        Args:
+            title: Article title.
+            body: Article body markdown.
+            credentials: Must contain ``devto_api_key``.
+            **kwargs: Supports ``tags`` (list, max 4) and ``published`` (bool).
+
+        Returns:
+            A :class:`PostResult` describing the outcome.
+        """
         api_key = credentials["devto_api_key"]
         tags = kwargs.get("tags", [])
         published = kwargs.get("published", False)
