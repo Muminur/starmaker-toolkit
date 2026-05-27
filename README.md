@@ -29,7 +29,7 @@ starmaker init          # Setup wizard
 starmaker audit         # Audit your repo
 starmaker draft         # Generate post drafts
 starmaker post          # Publish drafts to platforms
-starmaker auto-post     # Auto-generate & publish from README (NLP)
+starmaker auto-post --readme README.md   # Auto-generate & publish from README (NLP)
 starmaker credentials   # Setup API keys
 starmaker setup         # Browser-based credential wizard
 starmaker awesome       # Find awesome-lists
@@ -284,7 +284,7 @@ No API keys needed. StarMaker opens the HN submission page in Camoufox with the 
 # Install dev dependencies
 pip install -e ".[dev]"
 
-# Run all tests (100 tests)
+# Run all tests
 pytest
 
 # Run with coverage
